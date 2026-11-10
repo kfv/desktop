@@ -1,0 +1,182 @@
+--- greeter/Login.c.orig
++++ greeter/Login.c
+@@ -225,7 +225,9 @@
+     {XtNechoPasswd, XtCEchoPasswd, XtRBoolean, sizeof(Boolean),
+ 	offset(echo_passwd), XtRImmediate, (XtPointer) False},
+     {XtNechoPasswdChar, XtCEchoPasswdChar, XtRString,	sizeof (char *),
+-	offset(echo_passwd_char), XtRString, (XtPointer) "*" }
++	offset(echo_passwd_char), XtRString, (XtPointer) "*" },
++    {XtNshowCursor, XtCShowCursor, XtRBoolean, sizeof(Boolean),
++	offset(show_cursor), XtRImmediate, (XtPointer) True}
+ };
+ 
+ #undef offset
+@@ -297,7 +299,65 @@
+ 
+ 
+ #define STRING_WIDTH(f, s) 	TEXT_WIDTH (f, s, strlen(s))
++
++/*
++ * The password echo character as one UTF-8 character, such as U+2022,
++ * or 0 to use its first byte as before.  The value text itself stays
++ * Latin-1, so only the echo is drawn this way.
++ */
++static unsigned long
++EchoChar (LoginWidget w)
++{
++#ifdef USE_XFT
++    const char *s = w->login.echo_passwd_char;
++    FcChar32 c;
++
++    if (s != NULL && *s != '\0' &&
++	FcUtf8ToUcs4 ((const FcChar8 *) s, &c, strlen (s)) > 0)
++	return c;
++#endif
++    return 0;
++}
++
++/* Width of len bytes of a value, or of len echo characters. */
++static int
++ValueWidth (LoginWidget w, unsigned long echo, const char *s, int len)
++{
++#ifdef USE_XFT
++    if (echo) {
++	FcChar32 c = echo;
++	XGlyphInfo extents;
++
++	XftTextExtents32 (XtDisplay (w), w->login.textFace, &c, 1, &extents);
++	return len * extents.xOff;
++    }
++#endif
++    return TEXT_WIDTH (text, s, len);
++}
++
++static void
++DrawValueText (LoginWidget w, unsigned long echo, int x, int y,
++	       const char *s, int len)
++{
++#ifdef USE_XFT
++    if (echo) {
++	FcChar32 *buf;
++	int i;
+ 
++	if (len <= 0)
++	    return;
++	buf = (FcChar32 *) XtMalloc (len * sizeof (*buf));
++	for (i = 0; i < len; i++)
++	    buf[i] = echo;
++	XftDrawString32 (w->login.draw, &w->login.textcolor,
++			 w->login.textFace, x, y, buf, len);
++	XtFree ((char *) buf);
++	return;
++    }
++#endif
++    DRAW_STRING (text, x, y, s, len);
++}
++
+ /* Padded width of logo image, if compiled with XPM support */
+ #ifdef XPM
+ # define LOGO_W(w)     ((w)->login.logoWidth + ((w)->login.logoPadding * 2))
+@@ -358,6 +418,7 @@
+     loginPromptState state = PROMPT_STATE(w, promptNum);
+     char *text = VALUE_TEXT(w, promptNum);
+     int	x, y, height, width, curoff;
++    unsigned long echo = 0;
+ 
+     XDM_ASSERT(promptNum >= 0 && promptNum <= LAST_PROMPT);
+ 
+@@ -367,6 +428,8 @@
+ 	Cardinal length = strlen(text);
+ 	Cardinal i = 0;
+ 
++	echo = EchoChar(w);
++
+ 	text = XtMalloc(length + 1);
+ 
+ 	if (text == NULL)
+@@ -390,7 +453,7 @@
+     width = MAX_VALUE_W(w,promptNum);
+ 
+     if (cursor > VALUE_SHOW_START(w, promptNum))
+-	curoff = TEXT_WIDTH (text, text, cursor);
++	curoff = ValueWidth (w, echo, text, cursor);
+     else
+ 	curoff = 0;
+ 
+@@ -407,13 +470,13 @@
+ 	int offset = max(cursor, VALUE_SHOW_START(w, promptNum));
+ 	int textlen = strlen (text + offset);
+ 
+-	if (TEXT_WIDTH (text, text + offset, textlen) > (width - curoff)) {
++	if (ValueWidth (w, echo, text + offset, textlen) > (width - curoff)) {
+ 	    /* Recalculate amount of text that can fit in field */
+ 	    offset = VALUE_SHOW_START(w, promptNum);
+ 	    textlen = strlen (text + offset);
+ 
+ 	    while ((textlen > 0) &&
+-		   (TEXT_WIDTH (text, text + offset, textlen) > width))
++		   (ValueWidth (w, echo, text + offset, textlen) > width))
+ 	    {
+ 		if (offset < PROMPT_CURSOR(w, promptNum)) {
+ 		    offset++;
+@@ -428,9 +491,9 @@
+ 	    XFillRectangle (XtDisplay (w), XtWindow (w), w->login.bgGC,
+ 			    x, y - TEXT_Y_INC(w), width, height);
+ 
+-	    DRAW_STRING(text, x, y, text + offset, textlen);
++	    DrawValueText (w, echo, x, y, text + offset, textlen);
+ 	} else {
+-	    DRAW_STRING(text, x + curoff, y, text + offset, textlen);
++	    DrawValueText (w, echo, x + curoff, y, text + offset, textlen);
+ 	}
+     }
+     /* free memory */
+@@ -463,7 +526,7 @@
+     int	x, y;
+     int height, width;
+ 
+-    if (w->login.state != PROMPTING) {
++    if (w->login.state != PROMPTING || !w->login.show_cursor) {
+ 	return;
+     }
+ 
+@@ -491,7 +554,10 @@
+ 		int len = PROMPT_CURSOR(w, w->login.activePrompt) -
+ 		    VALUE_SHOW_START(w, w->login.activePrompt);
+ 
+-		x += len*TEXT_WIDTH(text, w->login.echo_passwd_char, 1);
++		unsigned long echo = EchoChar (w);
++
++		x += echo ? ValueWidth (w, echo, NULL, len) :
++		    len*TEXT_WIDTH(text, w->login.echo_passwd_char, 1);
+ 	    } else {
+ 		/* Move cursor one pixel per character to give some feedback
+ 		   without giving away the password length */
+--- greeter/Login.h.orig
++++ greeter/Login.h
+@@ -102,6 +102,7 @@
+ # define XtNallowRootLogin	"allowRootLogin"
+ # define XtNechoPasswd		"echoPasswd"
+ # define XtNechoPasswdChar	"echoPasswdChar"
++# define XtNshowCursor		"showCursor"
+ 
+ # define XtNface 		"face"
+ # define XtCFace		"Face"
+@@ -145,6 +146,7 @@
+ # define XtCAllowRootLogin	"AllowRootLogin"
+ # define XtCEchoPasswd		"EchoPasswd"
+ # define XtCEchoPasswdChar	"EchoPasswdChar"
++# define XtCShowCursor		"ShowCursor"
+ 
+ # define XtNchangePasswdMessage	"changePasswdMessage"
+ # define XtCChangePasswdMessage	"ChangePasswdMessage"
+--- greeter/LoginP.h.orig
++++ greeter/LoginP.h
+@@ -136,6 +136,7 @@
+ 	   for no-echo prompts like passwords */
+ 	Boolean		echo_passwd;
+ 	char *		echo_passwd_char;
++	Boolean		show_cursor;	/* draw the text cursor */
+ 	XIC		xic;		/* input method of input context */
+ 	loginPromptData	prompts[NUM_PROMPTS];
+ 	time_t 		msgTimeout;
