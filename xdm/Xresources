@@ -1,0 +1,43 @@
+! Greeter theme, included at the end of the Xresources that xdm ships,
+! so the stock key bindings stay.  Flat black box, 1px lines, JetBrains
+! Mono.  xrdb runs this through cpp: CLIENTHOST becomes the host name,
+! and an apostrophe in a comment would upset it.
+
+xlogin*greeting:		CLIENTHOST
+xlogin*unsecureGreeting:	unsecure session
+xlogin*namePrompt:		login\040
+xlogin*passwdPrompt:		password\040
+xlogin*fail:			login incorrect
+
+xlogin*greetFace:		JetBrains Mono-14:light
+xlogin*face:			JetBrains Mono-11
+xlogin*promptFace:		JetBrains Mono-11
+xlogin*failFace:		JetBrains Mono-11
+
+xlogin*background:		#000000
+xlogin*foreground:		#e5e5e5
+xlogin*greetColor:		#ffffff
+xlogin*promptColor:		#737373
+xlogin*inpColor:		#000000
+xlogin*failColor:		#a3a3a3
+
+! One colour for both bevel edges flattens them into plain lines.
+xlogin*hiColor:			#262626
+xlogin*shdColor:		#262626
+xlogin*frameWidth:		0
+xlogin*innerFramesWidth:	1
+xlogin*borderWidth:		1
+xlogin*borderColor:		#262626
+
+! No text cursor, and a bullet per character of the password.  Both
+! need patches/xdm.diff: stock xdm always draws the cursor and echoes
+! only the first byte of echoPasswdChar.
+xlogin*showCursor:		false
+xlogin*echoPasswd:		true
+xlogin*echoPasswdChar:		•
+
+! The logo sits at the right of the box, on the same black, with the
+! clear space the Foundation logo guidelines ask for.
+xlogin*logoFileName:		/usr/local/etc/X11/xdm/freebsd.xpm
+xlogin*logoPadding:		20
+xlogin*useShape:		false

@@ -1,0 +1,5 @@
+# The local display, on vt9 (ttyv8): the console /etc/ttys sets aside
+# for xdm.  Left to choose, X takes the first free VT while rc is still
+# running, before init starts the gettys, and then shares it with one.
+
+:0 local /usr/local/bin/X :0 vt9

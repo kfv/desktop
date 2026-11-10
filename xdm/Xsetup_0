@@ -1,0 +1,7 @@
+#!/bin/sh
+#
+# Run by xdm, as root, before the greeter: the same dot grid as the
+# session, in place of the stock xconsole.
+
+xsetroot -bitmap /usr/local/etc/X11/xdm/dot.xbm -fg '#737373' -bg '#000000'
+xsetroot -cursor_name left_ptr
