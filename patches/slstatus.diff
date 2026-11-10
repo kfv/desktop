@@ -1,0 +1,74 @@
+--- config.def.h.orig
++++ config.def.h
+@@ -18,6 +18,7 @@
+  *                                                     NULL on OpenBSD/FreeBSD
+  * battery_state       battery charging state          battery name (BAT0)
+  *                                                     NULL on OpenBSD/FreeBSD
++ * battery_unplugged   battery percentage, off AC only NULL (FreeBSD only)
+  * cat                 read arbitrary file             path
+  * cpu_freq            cpu frequency in MHz            NULL
+  * cpu_perc            cpu usage in percent            NULL
+@@ -66,5 +67,8 @@
+  */
+ static const struct arg args[] = {
+ 	/* function format          argument */
+-	{ datetime, "%s",           "%F %T" },
++	{ cpu_perc, "cpu %s%%  ",   NULL },
++	{ ram_perc, "mem %s%%  ",   NULL },
++	{ battery_unplugged, "bat %s%%  ", NULL },
++	{ datetime, "%s ",          "%F %H:%M" },
+ };
+--- slstatus.c.orig
++++ slstatus.c
+@@ -90,6 +90,8 @@
+ 		for (i = len = 0; i < LEN(args); i++) {
+ 			if (!(res = args[i].func(args[i].args)))
+ 				res = unknown_str;
++			if (!*res)	/* nothing to show: drop the label too */
++				continue;
+ 
+ 			if ((ret = esnprintf(status + len, sizeof(status) - len,
+ 			                     args[i].fmt, res)) < 0)
+--- slstatus.h.orig
++++ slstatus.h
+@@ -4,6 +4,7 @@
+ const char *battery_perc(const char *);
+ const char *battery_remaining(const char *);
+ const char *battery_state(const char *);
++const char *battery_unplugged(const char *);
+ 
+ /* cat */
+ const char *cat(const char *path);
+--- components/battery.c.orig
++++ components/battery.c
+@@ -196,6 +196,7 @@
+ 	#define BATTERY_LIFE  "hw.acpi.battery.life"
+ 	#define BATTERY_STATE "hw.acpi.battery.state"
+ 	#define BATTERY_TIME  "hw.acpi.battery.time"
++	#define AC_LINE       "hw.acpi.acline"
+ 
+ 	const char *
+ 	battery_perc(const char *unused)
+@@ -244,4 +245,22 @@
+ 
+ 		return bprintf("%uh %02um", rem / 60, rem % 60);
+ 	}
++
++	/*
++	 * The percentage while running on battery, and empty on AC power or
++	 * where there is no AC adapter to ask, so the entry is left out.
++	 */
++	const char *
++	battery_unplugged(const char *unused)
++	{
++		int acline;
++		size_t len;
++
++		len = sizeof(acline);
++		if (sysctlbyname(AC_LINE, &acline, &len, NULL, 0) < 0 || !len
++		    || acline)
++			return "";
++
++		return battery_perc(unused);
++	}
+ #endif
