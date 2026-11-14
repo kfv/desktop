@@ -19,7 +19,10 @@ help:
 
 install:
 	pkg install -A $$(cat pkg.list)
-	for p in $(PORTS); do make -C $(PORTSDIR)/$$p install || exit 1; done
+	for p in $(PORTS); do \
+		make -C $(PORTSDIR)/$$p install-missing-packages install || \
+		    exit 1; \
+	done
 	pkg lock -y $(PKGS)
 	install -m 644 xdm/Xresources $(XDMDIR)/Xresources.desktop
 	install -m 644 xdm/Xservers xdm/freebsd.xpm home/.local/share/dot.xbm \
